@@ -37,11 +37,11 @@ const useFirstParam = a => a;
 const reduceSum = (a, b) => a + b;
 
 // Get an existing category's ID, or inserts a new one and returns the new ID.
-const categoryIdFirstOrCreate = name => pool.query('SELECT id FROM category WHERE name = $1', [name])
-  .then(selectResult => (selectResult.rowCount !== 0) ? selectResult.rows[0].id : pool.query('INSERT INTO category(name) VALUES ($1) RETURNING id', [name])
-    .then(insertResult => insertResult.rows[0].id));
+const categoryIdFirstOrCreate = name => pool.query('INSERT INTO category (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id', [name])
+  .then(insertResult => insertResult.rows[0].id);
 
 Rx.Observable.fromArray(coordinates)
+  .delay(200)
   .flatMap(({ lat, lon }) => Rx.Observable.fromPromise(
     // Get nearby places
     googleMapsClient.placesNearby({
@@ -62,27 +62,40 @@ Rx.Observable.fromArray(coordinates)
     photos: place.photos || [],
     reviews: place.reviews || [],
   }))
+  .doOnNext(place => console.log(`Processing ${place.name}`))
   .flatMap(place => Rx.Observable.fromPromise(
     // Insert place into database
-    pool.query('INSERT INTO place(name, address,lat,lon,opening_hours,phone) VALUES($1,$2,$3,$4,$5,$6) RETURNING id', [
-      place.name,
-      place.formatted_address,
-      place.geometry.location.lat,
-      place.geometry.location.lng,
-      JSON.stringify(place.opening_hours) || '{}',
-      place.international_phone_number || '',
-    ]).then(result => Object.assign(place, { dbID: result.rows[0].id }))
+    pool.query(`
+    INSERT INTO place (
+      name, address,lat,lon,opening_hours,phone
+    ) VALUES ($1,$2,$3,$4,$5,$6) 
+    ON CONFLICT (name,address) 
+    DO UPDATE SET 
+    name = $1, 
+    address = $2,
+    lat = $3,
+    lon = $4,
+    opening_hours = $5,
+    phone = $6 
+    RETURNING id
+    `, [
+        place.name,
+        place.formatted_address,
+        place.geometry.location.lat,
+        place.geometry.location.lng,
+        JSON.stringify(place.opening_hours) || '{}',
+        place.international_phone_number || '',
+      ]).then(result => Object.assign(place, { dbID: result.rows[0].id })),
   ))
   .doOnNext(place => console.log(`Inserting pc ${place.name}`))
   .flatMap(place => Rx.Observable.fromArray(place.types).flatMap(type => Rx.Observable.fromPromise(
     // Deal with place_category
     categoryIdFirstOrCreate(type).then(categoryDBID =>
-      pool.query(
-        'INSERT INTO place_category(place_id,category_id) VALUES ($1,$2)',
+      pool.query('INSERT INTO place_category(place_id,category_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
         [place.dbID, categoryDBID],
       ),
     ),
-  ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
+  ).retry(1), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
   .doOnNext(place => console.log(`Inserting photo ${place.name}`))
   .flatMap(place => Rx.Observable.fromArray(place.photos)
     .flatMap(photo => Rx.Observable.fromPromise(
