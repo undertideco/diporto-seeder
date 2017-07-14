@@ -1,0 +1,109 @@
+require('dotenv').config();
+const pg = require('pg');
+const Rx = require('rx');
+const coordinates = require('./coordinates.json');
+
+// Database config
+const config = {
+  user: process.env.PG_USER,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
+  host: process.env.PG_HOST,
+  port: process.env.PG_PORT,
+  max: 50,
+  idleTimeoutMillis: 30000,
+};
+
+// Database pool
+const pool = new pg.Client(config);
+pool.on('error', (err) => {
+  console.error('idle client error', err.message, err.stack);
+});
+
+pool.connect();
+
+// Google Maps client
+const googleMapsClient = require('@google/maps').createClient({
+  key: process.env.GOOGLE_API_KEY,
+  Promise,
+});
+
+// Utility function for flatMap use only. Returns first parameter.
+const useFirstParam = a => a;
+
+// Utility function for reduce use only. Returns addition.
+const reduceSum = (a, b) => a + b;
+
+// Get an existing category's ID, or inserts a new one and returns the new ID.
+const categoryIdFirstOrCreate = name => pool.query('SELECT id FROM category WHERE name = $1', [name])
+  .then(selectResult => (selectResult.rowCount !== 0) ? selectResult.rows[0].id : pool.query('INSERT INTO category(name) VALUES ($1) RETURNING id', [name])
+    .then(insertResult => insertResult.rows[0].id));
+
+Rx.Observable.fromArray(coordinates)
+  .flatMap(({ lat, lon }) => Rx.Observable.fromPromise(
+    // Get nearby places
+    googleMapsClient.placesNearby({
+      location: [lat, lon],
+      radius: 300,
+      type: 'cafe|restaurant',
+    }).asPromise()
+      .then(resp => resp.json.results),
+  ))
+  .flatMap(Rx.Observable.fromArray)
+  .flatMap(googleNearbyPlace => Rx.Observable.fromPromise(
+    // Get more details of the place
+    googleMapsClient.place({ placeid: googleNearbyPlace.place_id })
+      .asPromise()
+      .then(resp => resp.json.result),
+  ), Object.assign)
+  .map(place => Object.assign(place, { // Patch for happiness
+    photos: place.photos || [],
+    reviews: place.reviews || [],
+  }))
+  .flatMap(place => Rx.Observable.fromPromise(
+    // Insert place into database
+    pool.query('INSERT INTO place(name, address,lat,lon,opening_hours,phone) VALUES($1,$2,$3,$4,$5,$6) RETURNING id', [
+      place.name,
+      place.formatted_address,
+      place.geometry.location.lat,
+      place.geometry.location.lng,
+      JSON.stringify(place.opening_hours) || '{}',
+      place.international_phone_number || '',
+    ]).then(result => Object.assign(place, { dbID: result.rows[0].id }))
+  ))
+  .doOnNext(place => console.log(`Inserting pc ${place.name}`))
+  .flatMap(place => Rx.Observable.fromArray(place.types).flatMap(type => Rx.Observable.fromPromise(
+    // Deal with place_category
+    categoryIdFirstOrCreate(type).then(categoryDBID =>
+      pool.query(
+        'INSERT INTO place_category(place_id,category_id) VALUES ($1,$2)',
+        [place.dbID, categoryDBID],
+      ),
+    ),
+  ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
+  .doOnNext(place => console.log(`Inserting photo ${place.name}`))
+  .flatMap(place => Rx.Observable.fromArray(place.photos)
+    .flatMap(photo => Rx.Observable.fromPromise(
+      pool.query(
+        'INSERT INTO place_photo(url,place_id) VALUES ($1,$2)',
+        [photo.photo_reference, place.dbID],
+      ),
+    ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
+  .doOnNext(place => console.log(`Inserting review ${place.name}`))
+  .flatMap(place => Rx.Observable.fromArray(place.reviews)
+    .flatMap(review => Rx.Observable.fromPromise(
+      pool.query(
+        'INSERT INTO place_review(place_id,author_name,author_profile_image_url,rating,text,time) VALUES ($1, $2, $3, $4, $5, $6)',
+        [
+          place.dbID,
+          review.author_name,
+          review.profile_photo_url,
+          review.rating,
+          review.text,
+          new Date(review.time * 1000),
+        ],
+      ),
+    ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
+  .subscribe(place => console.log(`Completed ${place.name}`), console.error, () => {
+    pool.end();
+  });
