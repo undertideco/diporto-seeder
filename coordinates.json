@@ -5,8 +5,133 @@
     "lon": 103.777862
   },
   {
+    "name": "Bukit Timah Market",
+    "lat": 1.339413,
+    "lon": 103.776272
+  },
+  {
+    "name": "SIM Global Education",
+    "lat": 1.330223,
+    "lon": 103.776011
+  },
+  {
+    "name": "Singapore Poly",
+    "lat": 1.311113,
+    "lon": 103.777193
+  },
+  {
     "name": "Tan Kah Kee",
     "lat": 1.324826,
     "lon": 103.807329
+  },
+  {
+    "name": "Beauty World Centre",
+    "lat": 1.342818,
+    "lon": 103.775650
+  },
+  {
+    "name": "JCube",
+    "lat": 1.333574,
+    "lon": 103.740325
+  },
+  {
+    "name": "Jem",
+    "lat": 1.333680,
+    "lon": 103.743986
+  },
+  {
+    "name": "IMM",
+    "lat": 1.335793,
+    "lon": 103.746894
+  },
+  {
+    "name": "Clementi Mall",
+    "lat": 1.315069,
+    "lon": 103.764549
+  },
+  {
+    "name": "NUS UTown",
+    "lat": 1.305960,
+    "lon": 103.773459
+  },
+  {
+    "name": "Star Vista",
+    "lat": 1.307287,
+    "lon": 103.788146
+  },
+  {
+    "name": "Ion Orchard",
+    "lat": 1.304372,
+    "lon": 103.832290
+  },
+  {
+    "name": "313 Somerset",
+    "lat": 1.301607,
+    "lon": 103.838224
+  },
+  {
+    "name": "Bugis+",
+    "lat": 1.299635,
+    "lon": 103.854900
+  },
+  {
+    "name": "Lot One",
+    "lat": 1.385353,
+    "lon": 103.745459
+  },
+  {
+    "name": "Bukit Panjang Plaza",
+    "lat": 1.380085,
+    "lon": 103.764370
+  },
+  {
+    "name": "Jln Pemimpin",
+    "lat": 1.350936,
+    "lon": 103.842887
+  },
+  {
+    "name": "Anchorpoint",
+    "lat": 1.288343,
+    "lon": 103.805152
+  },
+  {
+    "name": "Pasir Panjang Nakhon Area",
+    "lat": 1.275130,
+    "lon": 103.795079
+  },
+  {
+    "name": "Geylang Serai Market",
+    "lat": 1.316996,
+    "lon": 103.898395
+  },
+  {
+    "name": "Tembeling - Joo Chiat",
+    "lat": 1.313230,
+    "lon": 103.900774
+  },
+  {
+    "name": "Changi Airport",
+    "lat": 1.359548,
+    "lon": 103.989136
+  },
+  {
+    "name": "Woodlands Causeway Point",
+    "lat": 1.436375,
+    "lon": 103.786900
+  },
+  {
+    "name": "Junction 8 Bishan",
+    "lat": 1.350719,
+    "lon": 103.849507
+  },
+  {
+    "name": "Sim Lim Square",
+    "lat": 1.303277,
+    "lon": 103.852784
+  },
+  {
+    "name": "RWS Sentosa",
+    "lat": 1.254954,
+    "lon": 103.821831
   }
 ]

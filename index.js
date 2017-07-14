@@ -3,6 +3,8 @@ const pg = require('pg');
 const Rx = require('rx');
 const coordinates = require('./coordinates.json');
 
+const GOOGLE_PLACES_RADIUS = 400;
+
 // Database config
 const config = {
   user: process.env.PG_USER,
@@ -44,8 +46,8 @@ Rx.Observable.fromArray(coordinates)
     // Get nearby places
     googleMapsClient.placesNearby({
       location: [lat, lon],
-      radius: 300,
-      type: 'cafe|restaurant',
+      radius: GOOGLE_PLACES_RADIUS,
+      // type: 'cafe|restaurant',
     }).asPromise()
       .then(resp => resp.json.results),
   ))
