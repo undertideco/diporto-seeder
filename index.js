@@ -3,7 +3,7 @@ const pg = require('pg');
 const Rx = require('rx');
 const coordinates = require('./coordinates.json');
 
-const GOOGLE_PLACES_RADIUS = 400;
+const GOOGLE_PLACES_RADIUS = 600;
 
 // Database config
 const config = {
@@ -38,6 +38,9 @@ const reduceSum = (a, b) => a + b;
 
 // Get an existing category's ID, or inserts a new one and returns the new ID.
 const categoryIdFirstOrCreate = name => pool.query('INSERT INTO category (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id', [name])
+  .then(insertResult => insertResult.rows[0].id);
+
+const userIdFirstOrCreate = name => pool.query('INSERT INTO "user" (user_name,name,password_hash,is_admin) VALUES ($1,$2,\'\',false) ON CONFLICT (user_name) DO UPDATE SET user_name = $1 RETURNING id', [name.replace(' ', '').toLowerCase(), name])
   .then(insertResult => insertResult.rows[0].id);
 
 Rx.Observable.fromArray(coordinates)
@@ -100,24 +103,23 @@ Rx.Observable.fromArray(coordinates)
   .flatMap(place => Rx.Observable.fromArray(place.photos)
     .flatMap(photo => Rx.Observable.fromPromise(
       pool.query(
-        'INSERT INTO place_photo(url,place_id) VALUES ($1,$2)',
+        'INSERT INTO place_photo(url,place_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
         [photo.photo_reference, place.dbID],
       ),
     ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
   .doOnNext(place => console.log(`Inserting review ${place.name}`))
   .flatMap(place => Rx.Observable.fromArray(place.reviews)
     .flatMap(review => Rx.Observable.fromPromise(
-      pool.query(
-        'INSERT INTO place_review(place_id,author_name,author_profile_image_url,rating,text,time) VALUES ($1, $2, $3, $4, $5, $6)',
+      userIdFirstOrCreate(review.author_name).then(userID => pool.query(
+        'INSERT INTO place_review(place_id,rating,text,time,user_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
         [
           place.dbID,
-          review.author_name,
-          review.profile_photo_url,
           review.rating,
           review.text,
           new Date(review.time * 1000),
+          userID,
         ],
-      ),
+      )),
     ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
   .subscribe(place => console.log(`Completed ${place.name}`), console.error, () => {
     pool.end();
