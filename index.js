@@ -103,7 +103,7 @@ Rx.Observable.fromArray(coordinates)
   .flatMap(place => Rx.Observable.fromArray(place.photos)
     .flatMap(photo => Rx.Observable.fromPromise(
       pool.query(
-        'INSERT INTO place_photo(url,place_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        'INSERT INTO place_photo(google_place_id,place_id,is_google_places_image) VALUES ($1,$2,true) ON CONFLICT DO NOTHING',
         [photo.photo_reference, place.dbID],
       ),
     ), useFirstParam).defaultIfEmpty(9999).reduce(reduceSum), useFirstParam)
