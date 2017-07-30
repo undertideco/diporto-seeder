@@ -133,5 +133,50 @@
     "name": "RWS Sentosa",
     "lat": 1.254954,
     "lon": 103.821831
+  },
+  {
+    "name": "V6 Food Court CCK",
+    "lat": 1.401814,
+    "lon": 103.744771
+  },
+  {
+    "name": "Tanglin Halt Market",
+    "lat": 1.300637,
+    "lon": 103.797488
+  },
+  {
+    "name": "Purvis St",
+    "lat": 1.296383,
+    "lon": 103.855336
+  },
+  {
+    "name": "Ghim Moh Market",
+    "lat": 1.310855,
+    "lon": 103.788034
+  },
+  {
+    "name": "Redhill Food Centre",
+    "lat": 1.287026,
+    "lon": 103.818237
+  },
+  {
+    "name": "Upper Thomson Road",
+    "lat": 1.353471,
+    "lon": 103.833472
+  },
+  {
+    "name": "Thomson Shunfu RC",
+    "lat": 1.351640,
+    "lon": 103.837515
+  },
+  {
+    "name": "Kim San Leng Food Centre",
+    "lat": 1.349220,
+    "lon": 103.849938
+  },
+  {
+    "name": "Whampoa Makan Place",
+    "lat": 1.322882,
+    "lon": 103.855142
   }
 ]
