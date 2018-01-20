@@ -1,6 +1,6 @@
 require('dotenv').config();
 const pg = require('pg');
-const async = require('async');
+const Promise = require('bluebird');
 
 /**
  * @typedef {Object} Coordinate
@@ -46,96 +46,27 @@ const userIdFirstOrCreate = name => pool.query('INSERT INTO "user" (user_name,na
 
 console.log(`${coordinates.length} coordinates to process`);
 
-const waterFallDelay = delay => (arg, callback) => {
-  setTimeout(() => {
-    callback(null, arg);
-  }, delay);
-};
+/**
+ * Fetch nearby places for a place
+ * @param {Object} coordinate
+ * @return {Promise<Object[]>}
+ */
+const fetchNearbyPlaces = ({ lat, lon }) => googleMapsClient.placesNearby({
+  location: [lat, lon],
+  rankby: 'distance',
+}).asPromise()
+  .then(resp => resp.json)
+  .then(resp => resp.results);
 
 /**
- * Generate a waterfall callback handler for Google Places' subsequent calls
- * @param {number} lat 
- * @param {number} lon 
+ * Fetch detailed information about a place
+ * @param {Object} place
+ * @return {Promise<Object>}
  */
-const additionalCallback = (lat, lon) => (resp, callback) => {
-  if (!('next_page_token' in resp)) {
-    callback(null, resp);
-    return;
-  }
-  googleMapsClient.placesNearby({
-    location: [lat, lon],
-    pagetoken: resp.next_page_token,
-    // type: 'cafe|restaurant',
-  }).asPromise()
-    .then(res => res.json)
-    .then((data) => {
-      // Delay next call because Google
-      callback(null, Object.assign(data, {
-        results: data.results.concat(resp.results),
-      }));
-    })
-    .catch(callback);
-};
-
-// Work begins
-const getAllGooglePlaces = () => new Promise((resolve, reject) => {
-  async.concatLimit(coordinates, 6, ({ name, lat, lon }, concatCallback) => {
-    console.log(`Fetching nearby places for '${name}'`);
-    // Get nearby places
-    async.waterfall([
-      (firstCallback) => {
-        // Initial nearby (20)
-        googleMapsClient.placesNearby({
-          location: [lat, lon],
-          rankby: 'distance',
-          // type: 'cafe|restaurant',
-        }).asPromise()
-          .then(resp => resp.json)
-          .then((data) => {
-            firstCallback(null, data);
-          })
-          .catch(firstCallback);
-      },
-      waterFallDelay(2000),
-      additionalCallback(lat, lon),
-      waterFallDelay(2000),
-      additionalCallback(lat, lon),
-    ], (err, googlePlaces) => {
-      if (err !== null) {
-        concatCallback(err);
-        return;
-      }
-      concatCallback(null, googlePlaces.results);
-    });
-  }, (err, places) => {
-    if (err !== null) {
-      reject(err);
-      return;
-    }
-
-    // Retrieve more details
-    async.mapLimit(places, 3, (place, detailsCallback) => {
-      console.log(`Fetching additional details for '${place.name}'`);
-      googleMapsClient.place({ placeid: place.place_id })
-        .asPromise()
-        .then(resp => resp.json.result)
-        .then((data) => {
-          detailsCallback(null, Object.assign(place, data));
-        })
-        .catch(detailsCallback);
-    }, (er, allPlaces) => {
-      if (er !== null) {
-        reject(er);
-        return;
-      }
-      console.log(`Retrieved ${allPlaces.length} Google places`);
-      resolve(allPlaces.map(place => Object.assign(place, {
-        photos: place.photos || [],
-        reviews: place.reviews || [],
-      })));
-    });
-  });
-});
+const fetchDetailedPlaceData = place => googleMapsClient.place({ placeid: place.place_id })
+  .asPromise()
+  .then(resp => resp.json)
+  .then(resp => resp.result);
 
 // Insert place into database
 const insertPlace = place => pool.query(`
@@ -152,13 +83,13 @@ const insertPlace = place => pool.query(`
   phone = $6 
   RETURNING id
   `, [
-    place.name,
-    place.formatted_address,
-    place.geometry.location.lat,
-    place.geometry.location.lng,
-    JSON.stringify(place.opening_hours) || '{}',
-    place.international_phone_number || '',
-  ])
+  place.name,
+  place.formatted_address,
+  place.geometry.location.lat,
+  place.geometry.location.lng,
+  JSON.stringify(place.opening_hours) || '{}',
+  place.international_phone_number || '',
+])
   .then(result => result.rows[0].id);
 
 const insertCat = (cat, placeDbId) => categoryIdFirstOrCreate(cat)
@@ -186,20 +117,30 @@ const insertReview = (review, placeDbId) => userIdFirstOrCreate(review.author_na
   ));
 
 async function work() {
-  const places = await getAllGooglePlaces();
-  for (const place of places) {
-    console.log(`Processing '${place.name}'`);
-    const placeDbId = await insertPlace(place);
-    // Categories
-    await Promise.all(place.types.map(type => insertCat(type, placeDbId)));
+  for (const coord of coordinates) {
+    const nearbyPlaces = await fetchNearbyPlaces(coord);
 
-    // Photos
-    await Promise.all(place.photos.map(photo => insertPhoto(photo.photo_reference, placeDbId)));
+    for (const nearbyPlace of nearbyPlaces) {
+      console.log(`Processing '${nearbyPlace.name}'`);
 
-    // Reviews
-    await Promise.all(place.reviews.map(review => insertReview(review, placeDbId)));
+      const place = Object.assign(nearbyPlace, await fetchDetailedPlaceData(nearbyPlace));
+
+      const placeDbId = await insertPlace(place);
+      // Categories
+      await Promise.all(place.types.map(type => insertCat(type, placeDbId)));
+
+      if (place.photos) {
+        // Photos
+        await Promise.all(place.photos.map(photo => insertPhoto(photo.photo_reference, placeDbId)));
+      }
+
+      if (place.reviews) {
+        // Reviews
+        await Promise.all(place.reviews.map(review => insertReview(review, placeDbId)));
+      }
+    }
   }
-  process.exit();
+  process.exit(0);
 }
 
 work();
